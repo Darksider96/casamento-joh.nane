@@ -1,0 +1,6 @@
+{
+  "name": "Comemoração de Casamento",
+  "description": "Landing page de convite para comemoração de casamento com carrossel vertical para fotos e vídeos, contagem regressiva, player de música flutuante integrado ao YouTube, localização e confirmação de presença integrada ao Google Planilhas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
