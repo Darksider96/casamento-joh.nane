@@ -18,6 +18,7 @@ import {
   USER_DEFAULT_TRACKS,
   extractYouTubeId,
   getStoredTracks,
+  loadStoredTracks,
 } from '../lib/musicStorage';
 
 export { USER_DEFAULT_TRACKS, extractYouTubeId };
@@ -42,6 +43,10 @@ export const FloatingMusicPlayer: React.FC = () => {
 
   // Sync with global playlist updates (e.g., when edited from /admin)
   useEffect(() => {
+    loadStoredTracks().catch((error) => {
+      console.warn('Não foi possível carregar a playlist compartilhada.', error);
+    });
+
     const handlePlaylistUpdate = (e: any) => {
       if (e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
         setTracks(e.detail);

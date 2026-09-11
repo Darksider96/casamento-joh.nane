@@ -1,0 +1,49 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'johnatanmesquita96@gmail.com';
+    }
+
+    function validRSVP(rsvpId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'id', 'fullName', 'attending', 'phone', 'adultsCount',
+          'childrenCount', 'companionNames', 'dietaryRestrictions',
+          'message', 'submittedAt', 'syncedToSheets'
+        ])
+        && data.id == rsvpId
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120
+        && data.phone is string && data.phone.size() >= 5 && data.phone.size() <= 30
+        && data.attending in ['yes', 'no']
+        && data.adultsCount is int && data.adultsCount >= 0 && data.adultsCount <= 10
+        && data.childrenCount is int && data.childrenCount >= 0 && data.childrenCount <= 10
+        && data.companionNames is string && data.companionNames.size() <= 300
+        && data.dietaryRestrictions is string && data.dietaryRestrictions.size() <= 500
+        && data.message is string && data.message.size() <= 1000
+        && data.submittedAt is string && data.submittedAt.size() <= 40
+        && data.syncedToSheets == false;
+    }
+
+    match /rsvps/{rsvpId} {
+      allow create: if validRSVP(rsvpId);
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /publicSite/{documentId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /privateSettings/{documentId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

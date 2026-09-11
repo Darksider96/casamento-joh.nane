@@ -23,43 +23,15 @@ import { CouplePhoto, TransitionStyle, ObjectFitMode } from '../types';
 import { BotanicalBranchLeft, BotanicalBranchRight, BotanicalDivider } from './BotanicalDecorations';
 import {
   getStoredMedia,
+  FIXED_MEDIA,
   saveAllMedia,
   clearAllStoredMedia,
   getCarouselConfig,
+  loadCarouselConfig,
   saveCarouselConfig,
 } from '../lib/mediaStorage';
 
-// Beautiful vertical portrait photos as initial fallback
-const DEFAULT_VERTICAL_MEDIA: CouplePhoto[] = [
-  {
-    id: 'vm-1',
-    type: 'image',
-    url: 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=800&h=1400&q=80',
-    title: 'O Nosso Amor',
-    caption: 'Cada instante ao seu lado é o melhor capítulo da nossa história.',
-  },
-  {
-    id: 'vm-2',
-    type: 'image',
-    url: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&h=1400&q=80',
-    title: 'O Grande "Sim"',
-    caption: 'Celebrando o amor verdadeiro diante de quem mais amamos.',
-  },
-  {
-    id: 'vm-3',
-    type: 'image',
-    url: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=800&h=1400&q=80',
-    title: 'Nossa Cumplicidade',
-    caption: 'Sorrisos sinceros e a certeza de um para sempre a dois.',
-  },
-  {
-    id: 'vm-4',
-    type: 'image',
-    url: 'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?auto=format&fit=crop&w=800&h=1400&q=80',
-    title: 'Caminhando Juntos',
-    caption: 'De mãos dadas rumo ao nosso futuro repleto de sonhos.',
-  },
-];
+const DEFAULT_VERTICAL_MEDIA = FIXED_MEDIA;
 
 interface PhotoCarouselProps {
   showAdminControls?: boolean;
@@ -95,6 +67,12 @@ export const PhotoCarousel: React.FC<PhotoCarouselProps> = ({ showAdminControls 
     };
   }, []);
 
+  useEffect(() => {
+    loadCarouselConfig().catch((error) => {
+      console.warn('Não foi possível carregar a configuração compartilhada do carrossel.', error);
+    });
+  }, []);
+
   const handleUpdateTransition = (style: TransitionStyle) => {
     setTransitionEffect(style);
     saveCarouselConfig({ transitionEffect: style, objectFitMode });
@@ -123,13 +101,20 @@ export const PhotoCarousel: React.FC<PhotoCarouselProps> = ({ showAdminControls 
   // Load persisted media from IndexedDB on startup
   useEffect(() => {
     let isMounted = true;
-    getStoredMedia().then((stored) => {
-      if (isMounted && stored && stored.length > 0) {
-        setMediaList(stored);
-      }
-    });
+    getStoredMedia()
+      .then((stored) => {
+        if (isMounted && stored && stored.length > 0) setMediaList(stored);
+      })
+      .catch((error) => console.warn('Não foi possível carregar as mídias compartilhadas.', error));
+
+    const handleMediaUpdate = (event: Event) => {
+      const items = (event as CustomEvent<CouplePhoto[]>).detail;
+      if (Array.isArray(items) && items.length > 0) setMediaList(items);
+    };
+    window.addEventListener('wedding_media_updated', handleMediaUpdate);
     return () => {
       isMounted = false;
+      window.removeEventListener('wedding_media_updated', handleMediaUpdate);
     };
   }, []);
 
@@ -334,8 +319,8 @@ export const PhotoCarousel: React.FC<PhotoCarouselProps> = ({ showAdminControls 
       const isOnlyDefaults = mediaList.every((m) => !m.isCustom);
       const updatedList = isOnlyDefaults ? newItems : [...newItems, ...mediaList];
 
-      setMediaList(updatedList);
-      saveAllMedia(updatedList);
+      const saved = await saveAllMedia(updatedList);
+      setMediaList(saved);
       setCurrentIndex(0);
 
       const photosCount = newItems.filter((m) => m.type !== 'video').length;
@@ -366,7 +351,7 @@ export const PhotoCarousel: React.FC<PhotoCarouselProps> = ({ showAdminControls 
     });
   };
 
-  const handleAddMediaByUrl = (e: React.FormEvent) => {
+  const handleAddMediaByUrl = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMediaUrl.trim()) return;
 
@@ -380,8 +365,8 @@ export const PhotoCarousel: React.FC<PhotoCarouselProps> = ({ showAdminControls 
     };
 
     const updated = [newItem, ...mediaList];
-    setMediaList(updated);
-    saveAllMedia(updated);
+    const saved = await saveAllMedia(updated);
+    setMediaList(saved);
 
     setNewMediaUrl('');
     setNewMediaTitle('');
@@ -390,14 +375,14 @@ export const PhotoCarousel: React.FC<PhotoCarouselProps> = ({ showAdminControls 
     setCurrentIndex(0);
   };
 
-  const handleDeleteMedia = (id: string) => {
+  const handleDeleteMedia = async (id: string) => {
     if (mediaList.length <= 1) {
       alert('Você precisa manter pelo menos um item no carrossel.');
       return;
     }
     const updated = mediaList.filter((m) => m.id !== id);
-    setMediaList(updated);
-    saveAllMedia(updated);
+    const saved = await saveAllMedia(updated);
+    setMediaList(saved);
     if (currentIndex >= updated.length) {
       setCurrentIndex(Math.max(0, updated.length - 1));
     }

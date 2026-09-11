@@ -1,4 +1,6 @@
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { MusicTrack } from '../types';
+import { db } from './firebase';
 
 export const USER_DEFAULT_TRACKS: MusicTrack[] = [
   {
@@ -72,10 +74,22 @@ export function getStoredTracks(): MusicTrack[] {
   return USER_DEFAULT_TRACKS;
 }
 
-export function saveStoredTracks(tracks: MusicTrack[]): void {
+export async function loadStoredTracks(): Promise<MusicTrack[]> {
+  const snapshot = await getDoc(doc(db, 'publicSite', 'music'));
+  const tracks = snapshot.exists() ? snapshot.data().tracks : null;
+  if (Array.isArray(tracks) && tracks.length > 0) {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(tracks));
+    window.dispatchEvent(new CustomEvent('wedding_playlist_updated', { detail: tracks }));
+    return tracks as MusicTrack[];
+  }
+  return getStoredTracks();
+}
+
+export async function saveStoredTracks(tracks: MusicTrack[]): Promise<void> {
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(tracks));
     window.dispatchEvent(new CustomEvent('wedding_playlist_updated', { detail: tracks }));
+    await setDoc(doc(db, 'publicSite', 'music'), { tracks });
   } catch (e) {
     console.error('Failed to save playlist tracks', e);
   }

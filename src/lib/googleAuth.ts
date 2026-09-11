@@ -1,24 +1,20 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
-  getAuth,
   signInWithPopup,
   GoogleAuthProvider,
   onAuthStateChanged,
   signOut,
   User,
 } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { auth, isAdminEmail } from './firebase';
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-export const auth = getAuth(app);
+export { auth };
 
-const provider = new GoogleAuthProvider();
-// Request Google Sheets scope
-provider.addScope('https://www.googleapis.com/auth/spreadsheets');
-provider.setCustomParameters({
-  prompt: 'consent',
-  access_type: 'offline',
-});
+const adminProvider = new GoogleAuthProvider();
+adminProvider.setCustomParameters({ prompt: 'select_account' });
+
+const sheetsProvider = new GoogleAuthProvider();
+sheetsProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
+sheetsProvider.setCustomParameters({ prompt: 'consent' });
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
@@ -28,8 +24,8 @@ export const initAuth = (
   onAuthFailure?: () => void
 ) => {
   return onAuthStateChanged(auth, async (user: User | null) => {
-    if (user && cachedAccessToken) {
-      if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
+    if (user) {
+      if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken || '');
     } else {
       if (!isSigningIn) {
         cachedAccessToken = null;
@@ -39,10 +35,23 @@ export const initAuth = (
   });
 };
 
+export const adminSignIn = async (): Promise<User> => {
+  const result = await signInWithPopup(auth, adminProvider);
+  if (!isAdminEmail(result.user.email)) {
+    await signOut(auth);
+    throw new Error('Esta conta Google não está autorizada a acessar o painel.');
+  }
+  return result.user;
+};
+
 export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
   try {
     isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, sheetsProvider);
+    if (!isAdminEmail(result.user.email)) {
+      await signOut(auth);
+      throw new Error('Esta conta Google não está autorizada a acessar o painel.');
+    }
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {
       throw new Error('Não foi possível obter o token de acesso da conta Google.');

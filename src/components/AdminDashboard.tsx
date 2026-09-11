@@ -40,22 +40,21 @@ import {
   saveAllMedia,
   clearAllStoredMedia,
   getCarouselConfig,
+  loadCarouselConfig,
   saveCarouselConfig,
 } from '../lib/mediaStorage';
 import {
   getStoredTracks,
+  loadStoredTracks,
   saveStoredTracks,
   resetStoredTracks,
   extractYouTubeId,
   USER_DEFAULT_TRACKS,
 } from '../lib/musicStorage';
 import { createRSVPSheet, batchAppendRSVPs, verifySheetAccess } from '../lib/sheetsService';
-import { googleSignIn, logoutGoogle } from '../lib/googleAuth';
+import { adminSignIn, googleSignIn, logoutGoogle } from '../lib/googleAuth';
+import { isAdminEmail } from '../lib/firebase';
 import { PhotoCarousel } from './PhotoCarousel';
-
-// The password requested by the user
-const ADMIN_PASSWORD = 'Joh15978630@';
-const AUTH_STORAGE_KEY = 'wedding_admin_authenticated_v1';
 
 interface AdminDashboardProps {
   onNavigateHome: () => void;
@@ -79,19 +78,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onAuthChange,
 }) => {
   // Authentication state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem(AUTH_STORAGE_KEY) === 'true';
-    } catch {
-      return false;
-    }
-  });
-  const [passwordInput, setPasswordInput] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const isAuthenticated = isAdminEmail(user?.email);
   const [authError, setAuthError] = useState<string | null>(null);
 
   // Active Admin Tab
-  const [activeTab, setActiveTab] = useState<'media' | 'music' | 'rsvps' | 'sheets'>('media');
+  const [activeTab, setActiveTab] = useState<'media' | 'music' | 'rsvps' | 'sheets'>('rsvps');
 
   // Music Playlist state
   const [playlistTracks, setPlaylistTracks] = useState<MusicTrack[]>(getStoredTracks);
@@ -102,6 +93,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Sync with global playlist updates
   useEffect(() => {
+    loadStoredTracks().catch((error) => console.warn('Não foi possível carregar a playlist.', error));
+
     const handlePlaylistUpdate = (e: any) => {
       if (e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
         setPlaylistTracks(e.detail);
@@ -142,37 +135,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Load media items from IndexedDB
   useEffect(() => {
-    getStoredMedia().then((stored) => {
-      if (stored && stored.length > 0) {
-        setMediaList(stored);
-      }
+    getStoredMedia()
+      .then((stored) => {
+        if (stored && stored.length > 0) setMediaList(stored);
+      })
+      .catch((error) => setUploadFeedback(`Erro ao carregar mídias: ${error.message}`));
+    loadCarouselConfig().then(setCarouselConfig).catch((error) => {
+      console.warn('Não foi possível carregar a configuração do carrossel.', error);
     });
   }, []);
 
-  // Handle password submission
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passwordInput === ADMIN_PASSWORD) {
-      setIsAuthenticated(true);
-      setAuthError(null);
-      try {
-        sessionStorage.setItem(AUTH_STORAGE_KEY, 'true');
-      } catch (err) {
-        console.warn('Could not set session storage', err);
-      }
-    } else {
-      setAuthError('Senha incorreta. Verifique e tente novamente.');
+  const handleAdminLogin = async () => {
+    setIsSigningIn(true);
+    setAuthError(null);
+    try {
+      const signedInUser = await adminSignIn();
+      onAuthChange(signedInUser, null);
+    } catch (error: any) {
+      setAuthError(error.message || 'Não foi possível entrar com a Conta Google.');
+    } finally {
+      setIsSigningIn(false);
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setPasswordInput('');
-    try {
-      sessionStorage.removeItem(AUTH_STORAGE_KEY);
-    } catch (err) {
-      console.warn('Could not clear session storage', err);
-    }
+  const handleLogout = async () => {
+    await logoutGoogle();
+    onAuthChange(null, null);
   };
 
   // Carousel transition update
@@ -349,9 +337,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     if (newItems.length > 0) {
       const updated = [...mediaList, ...newItems];
-      setMediaList(updated);
-      await saveAllMedia(updated);
-      setUploadFeedback(`${newItems.length} arquivo(s) adicionado(s) com sucesso ao carrossel!`);
+      try {
+        const saved = await saveAllMedia(updated);
+        setMediaList(saved);
+        setUploadFeedback(`${newItems.length} arquivo(s) adicionado(s) com sucesso ao carrossel!`);
+      } catch (error: any) {
+        setUploadFeedback(error.message || 'Não foi possível enviar os arquivos.');
+      }
     } else {
       setUploadFeedback('Nenhum arquivo de imagem ou vídeo compatível encontrado.');
     }
@@ -375,8 +367,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     };
 
     const updated = [...mediaList, newItem];
-    setMediaList(updated);
-    await saveAllMedia(updated);
+    const saved = await saveAllMedia(updated);
+    setMediaList(saved);
 
     setNewMediaUrl('');
     setNewMediaTitle('');
@@ -389,8 +381,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleDeleteMedia = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja remover esta mídia do carrossel?')) return;
     const updated = mediaList.filter((m) => m.id !== id);
-    setMediaList(updated);
-    await saveAllMedia(updated);
+    const saved = await saveAllMedia(updated);
+    setMediaList(saved);
     setUploadFeedback('Item removido com sucesso.');
     setTimeout(() => setUploadFeedback(null), 3000);
   };
@@ -611,36 +603,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             Acesso Administrativo
           </h1>
           <p className="text-xs sm:text-sm text-stone-500 mb-6 leading-relaxed">
-            Digite a senha de administrador para gerenciar fotos, vídeos, transições do carrossel e confirmações de presença.
+            Entre com a Conta Google autorizada para gerenciar fotos, vídeos e confirmações de presença.
           </p>
 
-          <form onSubmit={handleLogin} className="space-y-4 text-left">
-            <div>
-              <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1.5">
-                Senha de Acesso
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={passwordInput}
-                  onChange={(e) => {
-                    setPasswordInput(e.target.value);
-                    if (authError) setAuthError(null);
-                  }}
-                  placeholder="Digite sua senha..."
-                  className="w-full px-4 py-3 pr-11 rounded-2xl border border-stone-300 text-stone-800 text-sm focus:outline-hidden focus:ring-2 focus:ring-teal-700 focus:border-transparent transition bg-[#FAF8F5]"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1 cursor-pointer"
-                  title={showPassword ? 'Ocultar senha' : 'Ver senha'}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
+          <div className="space-y-4 text-left">
 
             {authError && (
               <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2 animate-in fade-in duration-200">
@@ -650,13 +616,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
 
             <button
-              type="submit"
-              className="w-full py-3.5 rounded-2xl bg-teal-800 hover:bg-teal-900 text-white text-sm font-semibold shadow-md transition transform active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+              type="button"
+              onClick={handleAdminLogin}
+              disabled={isSigningIn}
+              className="w-full py-3.5 rounded-2xl bg-teal-800 hover:bg-teal-900 disabled:opacity-60 text-white text-sm font-semibold shadow-md transition transform active:scale-98 cursor-pointer flex items-center justify-center gap-2"
             >
               <KeyRound className="w-4 h-4" />
-              <span>Entrar no Painel</span>
+              <span>{isSigningIn ? 'Entrando...' : 'Entrar com Google'}</span>
             </button>
-          </form>
+          </div>
 
           <div className="mt-6 pt-5 border-t border-stone-100 flex items-center justify-center">
             <button
@@ -722,21 +690,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* Admin Navigation Tabs */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center gap-2 border-t border-stone-100 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('media')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'media'
-                ? 'border-teal-800 text-teal-900 bg-teal-50/50'
-                : 'border-transparent text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <ImageIcon className="w-4 h-4" />
-            <span>Fotos & Vídeos do Carrossel</span>
-            <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-700 text-[10px]">
-              {mediaList.length}
-            </span>
-          </button>
-
           <button
             onClick={() => setActiveTab('music')}
             className={`py-3 px-4 text-xs font-bold border-b-2 transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${

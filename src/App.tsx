@@ -26,9 +26,14 @@ import { BotanicalBranchLeft, BotanicalBranchRight, BotanicalDivider } from './c
 import { RSVPData, SheetsConfig } from './types';
 import { initAuth, getAccessToken } from './lib/googleAuth';
 import { appendRSVPToSheet } from './lib/sheetsService';
-
-const LOCAL_STORAGE_RSVPS_KEY = 'wedding_rsvps_list_v1';
-const LOCAL_STORAGE_CONFIG_KEY = 'wedding_sheets_config_v1';
+import { isAdminEmail } from './lib/firebase';
+import {
+  createRSVP,
+  getSheetsConfig,
+  replaceRSVPs,
+  saveSheetsConfig,
+  subscribeToRSVPs,
+} from './lib/firestoreService';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -76,34 +81,16 @@ export default function App() {
     }
   };
 
-  // Stored RSVPs
-  const [rsvps, setRsvps] = useState<RSVPData[]>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_RSVPS_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error(e);
-    }
-    return [];
-  });
+  const [rsvps, setRsvps] = useState<RSVPData[]>([]);
 
-  // Google Sheets Config
-  const [sheetsConfig, setSheetsConfig] = useState<SheetsConfig | null>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_CONFIG_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error(e);
-    }
-    return null;
-  });
+  const [sheetsConfig, setSheetsConfig] = useState<SheetsConfig | null>(null);
 
   // Listen to Auth State
   useEffect(() => {
     const unsubscribe = initAuth(
       (currentUser, token) => {
         setUser(currentUser);
-        setAccessToken(token);
+        setAccessToken(token || null);
       },
       () => {
         setUser(null);
@@ -113,18 +100,32 @@ export default function App() {
     return () => unsubscribe && unsubscribe();
   }, []);
 
-  const handleUpdateConfig = (config: SheetsConfig | null) => {
-    setSheetsConfig(config);
-    if (config) {
-      localStorage.setItem(LOCAL_STORAGE_CONFIG_KEY, JSON.stringify(config));
-    } else {
-      localStorage.removeItem(LOCAL_STORAGE_CONFIG_KEY);
+  useEffect(() => {
+    if (!isAdminEmail(user?.email)) {
+      setRsvps([]);
+      setSheetsConfig(null);
+      return;
     }
+
+    const unsubscribe = subscribeToRSVPs(
+      setRsvps,
+      (error) => console.error('Não foi possível carregar as confirmações:', error),
+    );
+    getSheetsConfig()
+      .then(setSheetsConfig)
+      .catch((error) => console.error('Não foi possível carregar a configuração da planilha:', error));
+    return unsubscribe;
+  }, [user]);
+
+  const handleUpdateConfig = async (config: SheetsConfig | null) => {
+    setSheetsConfig(config);
+    await saveSheetsConfig(config);
   };
 
-  const handleUpdateRSVPs = (newRSVPs: RSVPData[]) => {
+  const handleUpdateRSVPs = async (newRSVPs: RSVPData[]) => {
+    const previous = rsvps;
     setRsvps(newRSVPs);
-    localStorage.setItem(LOCAL_STORAGE_RSVPS_KEY, JSON.stringify(newRSVPs));
+    await replaceRSVPs(previous, newRSVPs);
   };
 
   // RSVP Submission handler
@@ -142,8 +143,7 @@ export default function App() {
     }
 
     const updatedRsvp = { ...newRsvp, syncedToSheets: synced };
-    const updatedList = [updatedRsvp, ...rsvps];
-    handleUpdateRSVPs(updatedList);
+    await createRSVP(updatedRsvp);
 
     return { success: true, syncedToSheets: synced };
   };

@@ -1,4 +1,5 @@
 node_modules/
+.npm-cache/
 build/
 dist/
 coverage/
@@ -6,4 +7,3 @@ coverage/
 *.log
 .env*
 !.env.example
-firebase-applet-config
