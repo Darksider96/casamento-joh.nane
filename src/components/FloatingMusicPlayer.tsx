@@ -36,7 +36,7 @@ export const FloatingMusicPlayer: React.FC = () => {
 
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(80);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showInvitationPrompt, setShowInvitationPrompt] = useState(true);
@@ -61,10 +61,17 @@ export const FloatingMusicPlayer: React.FC = () => {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const userHasPausedRef = useRef(false);
+  const tracksRef = useRef(tracks);
+  const currentTrackIndexRef = useRef(0);
+
+  useEffect(() => {
+    tracksRef.current = tracks;
+  }, [tracks]);
 
   const currentTrack = tracks[currentTrackIndex] || tracks[0] || USER_DEFAULT_TRACKS[0];
 
-  // Initialize YouTube Iframe Player with Autoplay
+  // Initialize the YouTube player. Playback starts from an explicit Play tap,
+  // which is required reliably by Chrome on Android.
   useEffect(() => {
     let checkInterval: any;
 
@@ -83,7 +90,7 @@ export const FloatingMusicPlayer: React.FC = () => {
         width: '1',
         videoId: currentTrack?.youtubeId || USER_DEFAULT_TRACKS[0].youtubeId,
         playerVars: {
-          autoplay: 1,
+          autoplay: 0,
           controls: 0,
           disablekb: 1,
           fs: 0,
@@ -96,17 +103,10 @@ export const FloatingMusicPlayer: React.FC = () => {
         events: {
           onReady: (event: any) => {
             event.target.setVolume(volume);
-            // Browsers only allow reliable autoplay while muted. The first
-            // interaction listener below enables sound as soon as permitted.
-            try {
-              if (!userHasPausedRef.current) {
-                event.target.mute();
-                setIsMuted(true);
-                event.target.playVideo();
-              }
-            } catch (e) {
-              console.log('Immediate autoplay blocked by browser policy; waiting for first interaction');
-            }
+            event.target.unMute();
+            setIsMuted(false);
+            setIsPlaying(false);
+            setShowInvitationPrompt(true);
           },
           onStateChange: (event: any) => {
             // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0
@@ -152,47 +152,14 @@ export const FloatingMusicPlayer: React.FC = () => {
     };
   }, []);
 
-  // Global first-interaction listener to immediately kick off playback if browser autoplay policy deferred it
-  useEffect(() => {
-    const handleFirstInteraction = () => {
-      if (userHasPausedRef.current) return false;
-      if (playerRef.current && typeof playerRef.current.playVideo === 'function') {
-        try {
-          playerRef.current.setVolume(volume);
-          playerRef.current.unMute();
-          const state = playerRef.current.getPlayerState ? playerRef.current.getPlayerState() : -1;
-          if (state !== 1) playerRef.current.playVideo();
-          setIsPlaying(true);
-          setIsMuted(false);
-          setShowInvitationPrompt(false);
-          return true;
-        } catch (err) {
-          console.log('Playback start on interaction:', err);
-        }
-      }
-      return false;
-    };
-
-    const interactionEvents = ['click', 'touchstart', 'keydown'];
-    const onEvent = () => {
-      const soundEnabled = handleFirstInteraction();
-      if (soundEnabled) {
-        interactionEvents.forEach((ev) => window.removeEventListener(ev, onEvent));
-      }
-    };
-
-    interactionEvents.forEach((ev) => window.addEventListener(ev, onEvent, { passive: true }));
-
-    return () => {
-      interactionEvents.forEach((ev) => window.removeEventListener(ev, onEvent));
-    };
-  }, [volume]);
-
   // Update track in player when currentTrack changes
   const changeTrack = (newIndex: number, autoPlay: boolean = true) => {
-    const validIndex = (newIndex + tracks.length) % tracks.length;
+    const activeTracks = tracksRef.current;
+    if (activeTracks.length === 0) return;
+    const validIndex = (newIndex + activeTracks.length) % activeTracks.length;
     setCurrentTrackIndex(validIndex);
-    const target = tracks[validIndex];
+    currentTrackIndexRef.current = validIndex;
+    const target = activeTracks[validIndex];
     if (playerRef.current && playerRef.current.loadVideoById && target?.youtubeId) {
       if (autoPlay) {
         playerRef.current.setVolume(volume);
@@ -212,26 +179,23 @@ export const FloatingMusicPlayer: React.FC = () => {
     if (!playerRef.current) return;
 
     try {
-      if (isMuted) {
-        userHasPausedRef.current = false;
-        playerRef.current.setVolume(volume);
-        playerRef.current.unMute();
-        playerRef.current.playVideo();
-        setIsMuted(false);
-        setIsPlaying(true);
-        setShowInvitationPrompt(false);
-        return;
-      }
       if (isPlaying) {
         userHasPausedRef.current = true;
         playerRef.current.pauseVideo();
         setIsPlaying(false);
       } else {
         userHasPausedRef.current = false;
-        if (playerRef.current.playVideo) {
+        playerRef.current.setVolume(volume);
+        playerRef.current.unMute();
+        const playerState = playerRef.current.getPlayerState?.() ?? -1;
+        if (playerState === -1 || playerState === 5) {
+          playerRef.current.loadVideoById(currentTrack.youtubeId);
+        } else {
           playerRef.current.playVideo();
-          setIsPlaying(true);
         }
+        setIsMuted(false);
+        setIsPlaying(true);
+        setShowInvitationPrompt(false);
       }
     } catch (e) {
       console.error('Error toggling play state:', e);
@@ -239,12 +203,12 @@ export const FloatingMusicPlayer: React.FC = () => {
   };
 
   const handleNextTrack = () => {
-    const nextIdx = (currentTrackIndex + 1) % tracks.length;
+    const nextIdx = (currentTrackIndexRef.current + 1) % tracksRef.current.length;
     changeTrack(nextIdx, true);
   };
 
   const handlePrevTrack = () => {
-    const prevIdx = (currentTrackIndex - 1 + tracks.length) % tracks.length;
+    const prevIdx = (currentTrackIndexRef.current - 1 + tracksRef.current.length) % tracksRef.current.length;
     changeTrack(prevIdx, true);
   };
 
@@ -292,7 +256,7 @@ export const FloatingMusicPlayer: React.FC = () => {
         className="fixed bottom-5 right-4 sm:right-6 z-40 transition-all duration-300 font-['Plus_Jakarta_Sans',sans-serif]"
       >
         {/* Play First Invitation Tooltip (Dismissible) */}
-        {showInvitationPrompt && isMuted && (
+        {showInvitationPrompt && !isPlaying && (
           <div className="absolute bottom-full right-0 mb-3 w-64 bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-xl border border-teal-800/20 text-xs text-stone-700 animate-bounce flex items-start gap-2">
             <Sparkles className="w-4 h-4 text-teal-800 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
