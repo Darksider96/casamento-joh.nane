@@ -431,42 +431,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     document.body.removeChild(link);
   };
 
-  // Google Sign-In
-  const handleGoogleLogin = async () => {
+  const requestSheetsAccess = async (): Promise<string> => {
     setIsSigningIn(true);
-    setSheetsMessage(null);
     try {
       const result = await googleSignIn();
-      if (result) {
-        onAuthChange(result.user, result.accessToken);
-        setSheetsMessage({ type: 'success', text: `Conectado com sucesso como ${result.user.email}!` });
-      }
-    } catch (err: any) {
-      console.error(err);
-      setSheetsMessage({ type: 'error', text: err.message || 'Falha ao conectar com o Google.' });
+      if (!result) throw new Error('Não foi possível obter permissão para o Google Sheets.');
+      onAuthChange(result.user, result.accessToken);
+      return result.accessToken;
     } finally {
       setIsSigningIn(false);
     }
   };
 
-  const handleGoogleLogout = async () => {
-    await logoutGoogle();
-    onAuthChange(null, null);
-    setSheetsMessage({ type: 'success', text: 'Você saiu da conta Google.' });
+  // Google Sheets authorization is separate from the admin login.
+  const handleGoogleLogin = async () => {
+    setSheetsMessage(null);
+    try {
+      await requestSheetsAccess();
+      setSheetsMessage({ type: 'success', text: 'Google Sheets autorizado com sucesso.' });
+    } catch (err: any) {
+      console.error(err);
+      setSheetsMessage({ type: 'error', text: err.message || 'Falha ao autorizar o Google Sheets.' });
+    }
   };
 
   // Create automatic sheet
   const handleCreateAutoSheet = async () => {
-    if (!accessToken) {
-      setSheetsMessage({ type: 'error', text: 'Por favor, conecte sua Conta Google primeiro.' });
-      return;
-    }
-
     setIsCreatingSheet(true);
     setSheetsMessage(null);
 
     try {
-      const result = await createRSVPSheet(accessToken, 'RSVP - Casamento Johnatan & Regiane 2026');
+      const sheetsToken = accessToken || await requestSheetsAccess();
+      const result = await createRSVPSheet(sheetsToken, 'RSVP - Casamento Johnatan & Regiane 2026');
       const newConfig: SheetsConfig = {
         spreadsheetId: result.spreadsheetId,
         spreadsheetUrl: result.spreadsheetUrl,
@@ -477,7 +473,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       onUpdateConfig(newConfig);
 
       if (rsvps.length > 0) {
-        await batchAppendRSVPs(accessToken, result.spreadsheetId, rsvps);
+        await batchAppendRSVPs(sheetsToken, result.spreadsheetId, rsvps);
         const updated = rsvps.map((r) => ({ ...r, syncedToSheets: true }));
         onUpdateRSVPs(updated);
       }
@@ -497,10 +493,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Link existing sheet
   const handleLinkCustomSheet = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessToken) {
-      setSheetsMessage({ type: 'error', text: 'Conecte sua Conta Google primeiro.' });
-      return;
-    }
     if (!customSheetInput.trim()) return;
 
     let sheetId = customSheetInput.trim();
@@ -513,7 +505,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setSheetsMessage(null);
 
     try {
-      const info = await verifySheetAccess(accessToken, sheetId);
+      const sheetsToken = accessToken || await requestSheetsAccess();
+      const info = await verifySheetAccess(sheetsToken, sheetId);
       const newConfig: SheetsConfig = {
         spreadsheetId: sheetId,
         spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${sheetId}/edit`,
@@ -534,8 +527,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Sync RSVPs
   const handleSyncPendingRSVPs = async () => {
-    if (!sheetsConfig?.spreadsheetId || !accessToken) {
-      setSheetsMessage({ type: 'error', text: 'Conecte sua conta Google e certifique-se de ter uma planilha vinculada.' });
+    if (!sheetsConfig?.spreadsheetId) {
+      setSheetsMessage({ type: 'error', text: 'Crie ou vincule uma planilha primeiro.' });
       return;
     }
 
@@ -543,6 +536,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setSheetsMessage(null);
 
     try {
+      const sheetsToken = accessToken || await requestSheetsAccess();
       const unsynced = rsvps.filter((r) => !r.syncedToSheets);
       if (unsynced.length === 0) {
         setSheetsMessage({ type: 'success', text: 'Todas as confirmações já estão sincronizadas com a planilha!' });
@@ -550,7 +544,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         return;
       }
 
-      await batchAppendRSVPs(accessToken, sheetsConfig.spreadsheetId, unsynced);
+      await batchAppendRSVPs(sheetsToken, sheetsConfig.spreadsheetId, unsynced);
       const updated = rsvps.map((r) => ({ ...r, syncedToSheets: true }));
       onUpdateRSVPs(updated);
       onUpdateConfig({ ...sheetsConfig, lastSyncedAt: new Date().toISOString() });
@@ -1641,20 +1635,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {user ? user.displayName || user.email : 'Conta Google Desconectada'}
                   </h3>
                   <p className="text-xs text-stone-500">
-                    {user
-                      ? `Conectado via ${user.email}. Pronto para criar e sincronizar planilhas.`
-                      : 'Conecte sua conta para salvar confirmações de presença automaticamente no Google Sheets.'}
+                    {accessToken
+                      ? `Google Sheets autorizado para ${user?.email}.`
+                      : `Painel conectado via ${user?.email}. Autorize o acesso ao Google Sheets para criar ou sincronizar planilhas.`}
                   </p>
                 </div>
               </div>
 
-              {user ? (
-                <button
-                  onClick={handleGoogleLogout}
-                  className="px-4 py-2 rounded-full border border-stone-200 text-stone-600 hover:bg-stone-50 text-xs font-semibold transition cursor-pointer"
-                >
-                  Desconectar Conta
-                </button>
+              {accessToken ? (
+                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Sheets autorizado
+                </span>
               ) : (
                 <button
                   onClick={handleGoogleLogin}
@@ -1662,7 +1654,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="px-5 py-2.5 rounded-full bg-teal-800 hover:bg-teal-900 text-white text-xs font-semibold shadow-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
-                  <span>{isSigningIn ? 'Conectando...' : 'Conectar com Conta Google'}</span>
+                  <span>{isSigningIn ? 'Autorizando...' : 'Autorizar Google Sheets'}</span>
                 </button>
               )}
             </div>
@@ -1685,11 +1677,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <button
                   onClick={handleCreateAutoSheet}
-                  disabled={!user || isCreatingSheet}
+                  disabled={isCreatingSheet || isSigningIn}
                   className="w-full py-3 rounded-2xl bg-teal-800 hover:bg-teal-900 text-white text-xs font-semibold shadow-md transition disabled:opacity-40 cursor-pointer flex items-center justify-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>{isCreatingSheet ? 'Criando Planilha...' : 'Criar Nova Planilha com 1 Clique'}</span>
+                  <span>
+                    {isCreatingSheet
+                      ? 'Criando Planilha...'
+                      : accessToken
+                        ? 'Criar Nova Planilha com 1 Clique'
+                        : 'Autorizar e Criar Planilha'}
+                  </span>
                 </button>
               </div>
 
@@ -1717,7 +1715,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                     <button
                       type="submit"
-                      disabled={!user || !customSheetInput.trim() || isSyncing}
+                      disabled={!customSheetInput.trim() || isSyncing || isSigningIn}
                       className="w-full py-2.5 rounded-xl bg-stone-800 hover:bg-stone-900 disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer"
                     >
                       {isSyncing ? 'Verificando...' : 'Vincular Esta Planilha'}
