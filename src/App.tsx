@@ -22,6 +22,7 @@ import { RSVPForm } from './components/RSVPForm';
 import { SheetsAdminModal } from './components/SheetsAdminModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { FloatingMusicPlayer } from './components/FloatingMusicPlayer';
+import { InvitationEnvelope } from './components/InvitationEnvelope';
 import { BotanicalBranchLeft, BotanicalBranchRight, BotanicalDivider } from './components/BotanicalDecorations';
 import { RSVPData, SheetsConfig } from './types';
 import { initAuth, getAccessToken } from './lib/googleAuth';
@@ -179,6 +180,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F8FAF8] text-stone-800 font-['Plus_Jakarta_Sans',sans-serif] selection:bg-teal-200 selection:text-teal-900">
+      <InvitationEnvelope />
       {/* Top Floating Navigation Bar */}
       <nav className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-teal-800/10 transition-all">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">

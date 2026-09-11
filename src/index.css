@@ -1,1 +1,294 @@
 @import "tailwindcss";
+
+.invitation-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 2rem 1rem;
+  background: rgba(238, 233, 225, 0.97);
+  backdrop-filter: blur(22px) saturate(70%);
+  color: #253b33;
+}
+
+.invitation-intro::before,
+.invitation-intro::after {
+  content: '';
+  position: absolute;
+  width: min(70vw, 700px);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  filter: blur(90px);
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.invitation-intro::before {
+  top: -35%;
+  left: -18%;
+  background: #8aa897;
+}
+
+.invitation-intro::after {
+  right: -20%;
+  bottom: -40%;
+  background: #c79883;
+}
+
+.invitation-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.24;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(71, 62, 52, 0.22) 0.55px, transparent 0.7px);
+  background-size: 5px 5px;
+  mix-blend-mode: multiply;
+}
+
+.invitation-heading {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: clamp(2rem, 7vh, 4.5rem);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(1.2rem, 5vw, 1.75rem);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.invitation-heading-heart {
+  width: 0.9rem;
+  color: #a66e5b;
+  fill: currentColor;
+}
+
+.envelope-button {
+  position: relative;
+  z-index: 2;
+  width: min(86vw, 370px);
+  height: min(55vw, 235px);
+  min-height: 190px;
+  border: 0;
+  background: transparent;
+  perspective: 1100px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.envelope-button:disabled {
+  cursor: wait;
+}
+
+.envelope-shadow {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  bottom: -12%;
+  height: 22%;
+  border-radius: 50%;
+  background: rgba(45, 55, 49, 0.24);
+  filter: blur(20px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+
+.envelope {
+  position: absolute;
+  inset: 0;
+  display: block;
+  filter: drop-shadow(0 18px 22px rgba(53, 48, 42, 0.14));
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.envelope-back {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 1px solid rgba(118, 99, 82, 0.2);
+  border-radius: 5px;
+  background: linear-gradient(145deg, #eee4d8, #e4d5c5);
+}
+
+.envelope-letter {
+  position: absolute;
+  z-index: 2;
+  left: 7%;
+  right: 7%;
+  top: 9%;
+  height: 86%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.2rem;
+  padding-top: 1.4rem;
+  border: 1px solid rgba(126, 105, 88, 0.18);
+  background: #fbf8f2;
+  color: #27463a;
+  box-shadow: 0 5px 12px rgba(50, 42, 34, 0.09);
+  transition: transform 0.75s 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.envelope-letter-small,
+.envelope-letter-date {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: #9a7566;
+}
+
+.envelope-letter-names {
+  font-family: 'Alex Brush', cursive;
+  font-size: clamp(1.55rem, 7vw, 2.15rem);
+  color: #285245;
+}
+
+.envelope-flap {
+  position: absolute;
+  inset: 0 0 29% 0;
+  z-index: 5;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  border-radius: 5px 5px 0 0;
+  background: linear-gradient(160deg, #f1e8de 4%, #ddccba 98%);
+  transform-origin: top center;
+  transition: transform 0.65s cubic-bezier(0.4, 0, 0.2, 1), z-index 0s 0.35s;
+}
+
+.envelope-front {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  clip-path: polygon(0 0, 50% 57%, 100% 0, 100% 100%, 0 100%);
+  border-radius: 5px;
+  background:
+    linear-gradient(32deg, #e4d4c3 0 49%, transparent 49.4%),
+    linear-gradient(-32deg, #eaded0 0 49%, transparent 49.4%),
+    #e9dccd;
+}
+
+.envelope-message {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: 18%;
+  width: 80%;
+  transform: translateX(-50%);
+  font-family: 'Alex Brush', cursive;
+  font-size: clamp(1.7rem, 8vw, 2.45rem);
+  line-height: 0.85;
+  text-align: center;
+  color: #315b4d;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.envelope-message small {
+  display: block;
+  margin-top: 0.55rem;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8f6758;
+}
+
+.envelope-seal {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  top: 53%;
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #96604f;
+  color: #f7e9dd;
+  box-shadow: 0 4px 9px rgba(77, 43, 34, 0.28), inset 0 0 0 3px rgba(255, 255, 255, 0.1);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.envelope-seal svg {
+  width: 1.1rem;
+  fill: currentColor;
+}
+
+.invitation-hint {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: clamp(2.2rem, 8vh, 4.5rem);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #5e6c65;
+  animation: invitationPulse 2s ease-in-out infinite;
+}
+
+.invitation-hint svg {
+  width: 0.9rem;
+}
+
+.invitation-intro.is-opening {
+  pointer-events: none;
+  animation: invitationFade 0.55s 0.8s ease forwards;
+}
+
+.invitation-intro.is-opening .envelope {
+  transform: translateY(1.2rem) scale(1.02);
+}
+
+.invitation-intro.is-opening .envelope-flap {
+  z-index: 1;
+  transform: rotateX(180deg);
+}
+
+.invitation-intro.is-opening .envelope-letter {
+  transform: translateY(-42%);
+}
+
+.invitation-intro.is-opening .envelope-message,
+.invitation-intro.is-opening .envelope-seal {
+  opacity: 0;
+  transform: translate(-50%, -65%) scale(0.8);
+}
+
+.invitation-intro.is-opening .envelope-shadow {
+  opacity: 0.08;
+  transform: scaleX(0.7);
+}
+
+.invitation-intro.is-opening .invitation-heading,
+.invitation-intro.is-opening .invitation-hint {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+@keyframes invitationFade {
+  to { opacity: 0; visibility: hidden; }
+}
+
+@keyframes invitationPulse {
+  0%, 100% { opacity: 0.62; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invitation-hint { animation: none; }
+  .invitation-intro.is-opening { animation-delay: 0.15s; }
+  .envelope,
+  .envelope-flap,
+  .envelope-letter { transition-duration: 0.2s; }
+}

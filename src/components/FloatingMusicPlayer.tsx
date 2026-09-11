@@ -70,6 +70,30 @@ export const FloatingMusicPlayer: React.FC = () => {
 
   const currentTrack = tracks[currentTrackIndex] || tracks[0] || USER_DEFAULT_TRACKS[0];
 
+  const startPlayback = () => {
+    const player = playerRef.current;
+    if (!player || !currentTrack?.youtubeId) return false;
+
+    try {
+      userHasPausedRef.current = false;
+      player.setVolume(volume);
+      player.unMute();
+      const playerState = player.getPlayerState?.() ?? -1;
+      if (playerState === -1 || playerState === 5) {
+        player.loadVideoById(currentTrack.youtubeId);
+      } else {
+        player.playVideo();
+      }
+      setIsMuted(false);
+      setIsPlaying(true);
+      setShowInvitationPrompt(false);
+      return true;
+    } catch (error) {
+      console.error('Não foi possível iniciar a música:', error);
+      return false;
+    }
+  };
+
   // Initialize the YouTube player. Playback starts from an explicit Play tap,
   // which is required reliably by Chrome on Android.
   useEffect(() => {
@@ -107,6 +131,8 @@ export const FloatingMusicPlayer: React.FC = () => {
             setIsMuted(false);
             setIsPlaying(false);
             setShowInvitationPrompt(true);
+            (window as any).__weddingMusicReady = true;
+            window.dispatchEvent(new CustomEvent('wedding_music_ready'));
           },
           onStateChange: (event: any) => {
             // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0
@@ -152,6 +178,12 @@ export const FloatingMusicPlayer: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleInvitationOpened = () => startPlayback();
+    window.addEventListener('wedding_invitation_opened', handleInvitationOpened);
+    return () => window.removeEventListener('wedding_invitation_opened', handleInvitationOpened);
+  }, [currentTrack.youtubeId, volume]);
+
   // Update track in player when currentTrack changes
   const changeTrack = (newIndex: number, autoPlay: boolean = true) => {
     const activeTracks = tracksRef.current;
@@ -184,18 +216,7 @@ export const FloatingMusicPlayer: React.FC = () => {
         playerRef.current.pauseVideo();
         setIsPlaying(false);
       } else {
-        userHasPausedRef.current = false;
-        playerRef.current.setVolume(volume);
-        playerRef.current.unMute();
-        const playerState = playerRef.current.getPlayerState?.() ?? -1;
-        if (playerState === -1 || playerState === 5) {
-          playerRef.current.loadVideoById(currentTrack.youtubeId);
-        } else {
-          playerRef.current.playVideo();
-        }
-        setIsMuted(false);
-        setIsPlaying(true);
-        setShowInvitationPrompt(false);
+        startPlayback();
       }
     } catch (e) {
       console.error('Error toggling play state:', e);
