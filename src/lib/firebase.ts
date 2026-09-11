@@ -8,8 +8,11 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-export const ADMIN_EMAIL = 'johnatanmesquita96@gmail.com';
+export const ADMIN_EMAILS = [
+  'johnatanmesquita96@gmail.com',
+  'naneemarques14@gmail.com',
+];
 
 export function isAdminEmail(email?: string | null): boolean {
-  return email?.trim().toLowerCase() === ADMIN_EMAIL;
+  return ADMIN_EMAILS.includes(email?.trim().toLowerCase() || '');
 }
