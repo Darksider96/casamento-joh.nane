@@ -173,7 +173,6 @@ export default function App() {
             setAccessToken(newToken);
           }}
         />
-        <FloatingMusicPlayer />
       </>
     );
   }
