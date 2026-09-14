@@ -98,6 +98,18 @@ export const EventLocation: React.FC = () => {
           </div>
         </div>
 
+        <div className="mb-6 rounded-2xl bg-white p-6 border border-teal-800/15 text-center">
+          <h3 className="font-['Cormorant_Garamond'] text-2xl sm:text-3xl font-semibold text-teal-900 mb-2">
+            Um momento de confraternização
+          </h3>
+          <p className="text-stone-600 text-sm sm:text-base leading-relaxed max-w-2xl mx-auto">
+            Convidamos você e sua família para celebrar conosco este momento tão especial,
+            em um jantar de confraternização cheio de carinho e alegria.{' '}
+            <strong className="font-semibold text-teal-900">Cada família ficará responsável pelo pagamento do seu próprio jantar.</strong>{' '}
+            Sua presença será o nosso maior presente!
+          </p>
+        </div>
+
         {/* Deadline Notice Banner */}
         <div className="flex items-center gap-3 p-4 rounded-2xl bg-[#FAF1EC] border border-[#D5B09E]/50 text-[#8E5B4C]">
           <AlertCircle className="w-5 h-5 flex-shrink-0 text-[#9E6554]" />
